@@ -6,10 +6,12 @@ A Viam sensor component that provides access to user-defined metadata for robots
 
 This sensor component fetches and updates user-defined metadata from the Viam platform using the Fleet Management API. It provides both read and write access to metadata at the robot (machine) level and robot part level.
 
+This module is implemented in Go using the [Viam Go SDK](https://github.com/viamrobotics/rdk).
+
 ### Features
 
-- **Read Metadata**: Get user-defined metadata for both robots and robot parts via `get_readings()`
-- **Update Metadata**: Update user-defined metadata through `do_command()` 
+- **Read Metadata**: Get user-defined metadata for both robots and robot parts via `Readings` (`GetReadings`)
+- **Update Metadata**: Update user-defined metadata through `DoCommand`
 - **Automatic Authentication**: Uses Viam API keys for secure access to the Fleet Management API
 
 This resource automatically detects robot and part IDs from Viam environment variables
@@ -42,20 +44,18 @@ If running from the registry, they will typically already be available in the en
 
 ### API Usage
 
-#### get_readings()
+#### GetReadings
 
 Returns the current user-defined metadata for both the robot and robot part.
 
 **Response Format:**
-```python
+```json
 {
   "robot": {
-    # Robot-level user-defined metadata
     "owner": "john.doe",
     "maintenance_schedule": "weekly"
   },
   "part": {
-    # Robot part-level user-defined metadata  
     "calibration_date": "2024-01-15",
     "firmware_version": "1.2.3"
   }
@@ -66,13 +66,13 @@ Returns the current user-defined metadata for both the robot and robot part.
 
 Updates user-defined metadata for either the robot or robot part.
 
-**Command Format:**
-```python
+**Command Format** (`"scope"` is `"robot"` for machine-level metadata, `"part"` for part-level):
+```json
 {
   "command": "update",
-  "scope": "robot|part",  # "robot" for robot/machine-level, "part" for part-level
+  "scope": "robot",
   "metadata": {
-    # Dictionary of metadata key-value pairs to update
+    "key": "value"
   }
 }
 ```
@@ -80,10 +80,10 @@ Updates user-defined metadata for either the robot or robot part.
 **Examples:**
 
 Update robot-level metadata:
-```python
-command = {
+```json
+{
   "command": "update",
-  "scope": "robot", 
+  "scope": "robot",
   "metadata": {
     "location": "warehouse-2",
     "last_maintenance": "2024-01-20",
@@ -93,12 +93,12 @@ command = {
 ```
 
 Update robot part-level metadata:
-```python
-command = {
+```json
+{
   "command": "update",
   "scope": "part",
   "metadata": {
-    "calibration_date": "2024-01-25", 
+    "calibration_date": "2024-01-25",
     "sensor_range": "0-100°C",
     "accuracy": "±0.5°C"
   }
@@ -108,9 +108,9 @@ command = {
 **Response Format:**
 
 Success:
-```python
+```json
 {
-  "success": True,
+  "success": true,
   "message": "Robot metadata updated successfully",
   "scope": "robot",
   "robot_id": "your-robot-id"
@@ -118,11 +118,11 @@ Success:
 ```
 
 Error:
-```python
+```json
 {
-  "success": False,
+  "success": false,
   "error": "Error message details",
-  "scope": "robot", 
+  "scope": "robot",
   "command": "update"
 }
 ```
