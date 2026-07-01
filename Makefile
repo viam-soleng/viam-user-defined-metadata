@@ -2,17 +2,18 @@ GO_BUILD_ENV := CGO_ENABLED=0
 GO_BUILD_FLAGS := -ldflags="-s -w"
 MODULE_BINARY := bin/user-defined-metadata
 
-# Viam cloud build sets VIAM_TARGET_OS per target platform (see meta.json
-# "build.arch"). Windows is cross-compiled and needs a .exe suffix plus a
-# CGO-free build; the entrypoint in meta.json stays as the base name and Viam
-# resolves the .exe on Windows. The linux/darwin arches are handled by `packages`.
+# Viam cloud build sets VIAM_TARGET_OS per target platform
+# Windows is cross-compiled and needs a .exe suffix plus a
+# CGO-free build. viam-server resolves the entrypoint from the meta.json,
+# so the Windows tarball must ship a meta.json whose entrypoint names the .exe
+# see fix-meta-for-win below.
 ifeq ($(VIAM_TARGET_OS), windows)
 	GO_BUILD_ENV += GOOS=windows GOARCH=amd64
 	GO_BUILD_FLAGS := -ldflags="-s -w" -tags no_cgo
 	MODULE_BINARY = bin/user-defined-metadata.exe
 endif
 
-.PHONY: build lint update test module.tar.gz packages module all setup clean upload
+.PHONY: build lint update test module.tar.gz fix-meta-for-win packages module all setup clean upload
 
 build: $(MODULE_BINARY)
 
@@ -32,6 +33,16 @@ test:
 
 module.tar.gz: build
 	tar -czf module.tar.gz $(MODULE_BINARY) meta.json
+	-test -e .git/config && git checkout meta.json
+
+# On Windows cloud builds, rewrite the entrypoint to the .exe before packaging;
+# the trailing `git checkout meta.json` above restores the working copy afterward.
+ifeq ($(VIAM_TARGET_OS), windows)
+module.tar.gz: fix-meta-for-win
+endif
+
+fix-meta-for-win:
+	jq '.entrypoint = "bin/user-defined-metadata.exe"' meta.json > temp.json && mv temp.json meta.json
 
 # `make packages` cross-compiles every architecture locally and produces
 # one tarball per arch at bin/<goos>-<goarch>/module.tar.gz, ready for `make upload`.
@@ -46,7 +57,12 @@ bin/%/module.tar.gz: Makefile go.mod cmd/module/*.go models/*.go meta.json
 	  mkdir -p $$workdir/bin; \
 	  echo ">> building $$os/$$arch -> $$workdir/bin/$$bin$$ext"; \
 	  GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $$tags -o $$workdir/bin/$$bin$$ext ./cmd/module; \
-	  tar -czf $$workdir/module.tar.gz -C $$workdir bin/$$bin$$ext -C $(CURDIR) meta.json
+	  if [ "$$os" = "windows" ]; then \
+	    jq '.entrypoint = "bin/'$$bin'.exe"' meta.json > $$workdir/meta.json; \
+	  else \
+	    cp meta.json $$workdir/meta.json; \
+	  fi; \
+	  tar -czf $$workdir/module.tar.gz -C $$workdir bin/$$bin$$ext meta.json
 
 module: test module.tar.gz
 
